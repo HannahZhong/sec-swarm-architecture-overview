@@ -77,7 +77,9 @@ Concretely, a slice of `.agent_state/` during a pipeline run looks like:
 ├── planner_handoff.md                  # step 0 handoff
 ├── script_coder_handoff.md             # step 1 handoff
 ├── scripts/                            # generated Glue PySpark lives here
-├── data_cleaner_handoff.md             # step 2 handoff
+├── data_cleaner_review.html            # step 2 generated HTML review surface (HITL gate 2)
+├── data_cleaner_review.json            # step 2 human triage decisions (state-injected)
+├── data_cleaner_handoff.md             # step 2 handoff (after review is confirmed)
 ├── glue_verifier_handoff.md            # step 3 handoff (status: succeeded|failed)
 ├── glue_verifier_data_profile.md       # step 3 output on success (column types)
 ├── glue_verifier_sample.parquet        # step 3 sample output on success
@@ -138,12 +140,13 @@ The orchestrator enforces an invariant before resuming: **every required prior h
 
 ## 7. HITL gates
 
-The orchestrator uses Node's `readline` to block on human input at exactly two gates (plus a confirmation before a resumed run):
+The pipeline blocks on human input at three mandatory gates (plus a confirmation before a resumed run):
 
-1. **After planning** — the human reviews `formal_specs.md` and approves before any code is written.
-2. **After security review** — if `secops_reviewer_handoff.md` contains `status: rejected`, the run stops and waits for a human to fix and continue.
+1. **After planning** — the human reviews `formal_specs.md` and approves before any code is written. *(Node `readline` prompt.)*
+2. **Before data cleaning executes** — the developer reviews the data cleaner's *proposed* rules and triages them item-by-item; the cleaning step only runs after this confirmation. This gate is rendered as a generated local HTML page ("UI-as-a-file") whose per-item decisions are serialized to a state-injected JSON in `.agent_state/`, so the human's intent re-enters the DAG through the same file mailbox. See [`README` Decision 5](../README.md#3-key-engineering-decisions).
+3. **After security review** — if `secops_reviewer_handoff.md` contains `status: rejected`, the run stops and waits for a human to fix and continue. *(Node `readline` prompt.)*
 
-At each gate the user types `y` to proceed or `q` to abort. Aborting is clean: the partial state remains on disk for a later `--from` resume.
+At the `readline` gates (1 and 3) the user types `y` to proceed or `q` to abort; at gate 2 the developer approves/skips/gives feedback per rule in the HTML page. Aborting is clean: the partial state remains on disk for a later `--from` resume.
 
 ---
 

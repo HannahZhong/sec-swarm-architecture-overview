@@ -10,7 +10,8 @@ graph TD
     %% Tree 1: Data Pipeline Track
     subgraph Tree_1 [Tree 1: Data Pipeline - Strictly Sequential]
         A1(<b>1_script_coder</b><br/><i>specs to AWS Glue PySpark</i>):::agent
-        A2(<b>2_data_cleaner</b><br/><i>apply cleaning rules to scripts</i>):::agent
+        A2(<b>2_data_cleaner</b><br/><i>propose + apply cleaning rules</i>):::agent
+        HITL_CLEAN{HITL: Approve Cleaning Rules<br/>local HTML review}:::hitl
         A3(<b>3_glue_verifier</b><br/><i>run in dev + validate output</i>):::agent
         A4(<b>4_tf_coder</b><br/><i>scripts to Snowflake + Glue TF</i>):::agent
         A5(<b>5_secops_reviewer</b><br/><i>artifacts to approve or reject</i>):::secure
@@ -19,7 +20,8 @@ graph TD
         A7(<b>7_deploy_trigger</b><br/><i>PR to Harness CICD to SQA</i>):::agent
 
         A1 -->|python_handoff.md| A2
-        A2 -->|cleaned_handoff.md| A3
+        A2 -->|proposed rules HTML| HITL_CLEAN
+        HITL_CLEAN -->|cleaning_review.json<br/>then cleaned_handoff.md| A3
         A3 -->|status: succeeded| A4
         A3 -.->|status: failed<br/>max 5 attempts| A1
         A3 -->|glue_verifier_handoff.md<br/>+ data_profile.md| A4

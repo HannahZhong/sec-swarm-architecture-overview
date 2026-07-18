@@ -95,7 +95,7 @@ The AWS dev account used for Glue verification (`721527036298`) is reached throu
 | Over-privileged IAM in generated TF | SecOps IAM review (>90% catch target) |
 | Bad code reaches production | Executed-in-dev verification (steps 1–3) *before* PR |
 | Runaway retries / cost | Bounded verifier loop (max 5) + per-agent timeout |
-| Unattended mistake at a critical moment | HITL gates at spec approval and security rejection |
+| Unattended mistake at a critical moment | HITL gates at spec approval, data-cleaning review, and security rejection |
 
 ---
 
