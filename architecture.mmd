@@ -1,0 +1,81 @@
+graph TD
+    %% Input + Planning (pre-orchestration)
+    INPUT[Teams Meeting Transcript]
+    A0(<b>0_planner</b><br/><i>transcript to specs + jira ticket</i>):::agent
+    HITL1{HITL: Approve Specs}:::hitl
+
+    %% Orchestrator
+    ORCH((<b>index.js</b><br/><i>Deterministic DAG Orchestrator</i>))
+
+    %% Tree 1: Data Pipeline Track
+    subgraph Tree_1 [Tree 1: Data Pipeline - Strictly Sequential]
+        A1(<b>1_script_coder</b><br/><i>specs to AWS Glue PySpark</i>):::agent
+        A2(<b>2_data_cleaner</b><br/><i>apply cleaning rules to scripts</i>):::agent
+        A3(<b>3_glue_verifier</b><br/><i>run in dev + validate output</i>):::agent
+        A4(<b>4_tf_coder</b><br/><i>scripts to Snowflake + Glue TF</i>):::agent
+        A5(<b>5_secops_reviewer</b><br/><i>artifacts to approve or reject</i>):::secure
+        HITL2{HITL: Security Rejection}:::hitl
+        A6(<b>6_git_operator</b><br/><i>artifacts to branch + PR</i>):::agent
+        A7(<b>7_deploy_trigger</b><br/><i>PR to Harness CICD to SQA</i>):::agent
+
+        A1 -->|python_handoff.md| A2
+        A2 -->|cleaned_handoff.md| A3
+        A3 -->|status: succeeded| A4
+        A3 -.->|status: failed<br/>max 5 attempts| A1
+        A3 -->|glue_verifier_handoff.md<br/>+ data_profile.md| A4
+        A4 -->|tf_handoff.md| A5
+        A5 -->|status: approved| A6
+        A5 -.->|status: rejected| HITL2
+        HITL2 -.->|manual fix| A6
+        A6 -->|git_operator_handoff.md| A7
+    end
+
+    %% Tree 2: Analytics Track
+    subgraph Tree_2 [Tree 2: Analytics - Sequential]
+        A8(<b>8_metrics_generator</b><br/><i>tables to Snowflake SQL metrics</i>):::agent
+        A9(<b>9_powerbi_agent</b><br/><i>metrics to PowerBI reports</i>):::agent
+        A8 -->|metrics_generator_handoff.md| A9
+    end
+
+    %% Shared Knowledge (read by multiple agents)
+    subgraph Shared ["_shared/ Knowledge Docs"]
+        KD1[pipeline-architecture.md]:::knowledge
+        KD2[pipeline-validation.md]:::knowledge
+    end
+
+    %% Standalone Skills (on-demand, not part of DAG)
+    subgraph Skills ["skills/ On-Demand"]
+        S1(<b>glue-troubleshoot</b><br/><i>triage failed Glue jobs</i>):::skill
+        S2(<b>pipeline-migration</b><br/><i>migrate old pipelines</i>):::skill
+        S3(<b>sync-upstreams</b><br/><i>sync upstream TF references</i>):::skill
+        S4(<b>jira</b><br/><i>query + manage Jira issues</i>):::skill
+    end
+
+    %% Mailbox
+    STATE["/.agent_state/<br/>file mailbox"]:::state
+
+    %% Flow: Planning phase (before orchestrator)
+    INPUT --> A0
+    A0 -->|formal_specs.md + jira_ticket.md| HITL1
+    HITL1 -->|approved| ORCH
+
+    %% Flow: Orchestrator dispatches to trees
+    ORCH ==>|formal_specs.md| A1
+    ORCH ==>|--tree=analytics| A8
+    A7 -.->|Event: SQA Deploy Success| A8
+
+    %% Mailbox connections
+    ORCH -->|write current_task.md| STATE
+    STATE -->|read handoff.md| ORCH
+
+    %% Shared knowledge feeds agents
+    KD1 -.-> A1
+    KD1 -.-> A4
+    KD2 -.-> A5
+
+    classDef secure fill:#f9f1f1,stroke:#d9534f,stroke-width:2px;
+    classDef agent fill:#f1f8e9,stroke:#4caf50,stroke-width:2px;
+    classDef hitl fill:#fff3cd,stroke:#d4a017,stroke-width:2px;
+    classDef state fill:#e8daef,stroke:#6b4c8a,stroke-width:1px;
+    classDef skill fill:#e3f2fd,stroke:#1976d2,stroke-width:2px;
+    classDef knowledge fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,stroke-dasharray:5 5;
