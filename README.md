@@ -92,9 +92,7 @@ graph TD
 
     subgraph Skills ["skills/ On-Demand"]
         S1(<b>glue-troubleshoot</b>):::skill
-        S2(<b>pipeline-migration</b>):::skill
-        S3(<b>sync-upstreams</b>):::skill
-        S4(<b>jira</b>):::skill
+        S2(<b>jira</b>):::skill
     end
 
     STATE["/.agent_state/<br/>file mailbox"]:::state
@@ -236,7 +234,7 @@ Full detail: [`docs/tooling-and-security.md`](./docs/tooling-and-security.md).
 
 **Shared knowledge** (`_shared/`, read-only, scoped via `--add-dir`): `pipeline-architecture.md` (raw-only vs raw+modeled decision) feeds the script and TF coders; `pipeline-validation.md` (ETL output checklist) feeds the verifier and SecOps reviewer.
 
-**On-demand skills** (outside the DAG): `glue-troubleshoot`, `pipeline-migration`, `sync-upstreams`, `jira`.
+**On-demand skills** (outside the DAG): `glue-troubleshoot`, `jira`.
 
 ---
 
