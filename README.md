@@ -37,7 +37,7 @@ Standing up a new security data pipeline used to be a slow, multi-day, multi-per
 | Metric | Target |
 | --- | --- |
 | End-to-end time (transcript → SQA deploy) | **< 45 minutes** |
-| Human intervention points | **Exactly 2** (spec approval + security gate) |
+| Human intervention points | **Exactly 3** (spec approval + data-cleaning review + security gate) |
 | Security gate catch rate | **100%** of hardcoded secrets, **>90%** of IAM over-privilege |
 | Reproducibility | Same input → same DAG path (deterministic orchestration) |
 | Debuggability on failure | `.agent_state/` **always** contains partial artifacts |
@@ -57,7 +57,8 @@ graph TD
 
     subgraph Tree_1 [Tree 1: Data Pipeline - Strictly Sequential]
         A1(<b>1_script_coder</b><br/><i>specs to AWS Glue PySpark</i>):::agent
-        A2(<b>2_data_cleaner</b><br/><i>apply cleaning rules to scripts</i>):::agent
+        A2(<b>2_data_cleaner</b><br/><i>propose + apply cleaning rules</i>):::agent
+        HITL_CLEAN{HITL: Approve Cleaning Rules<br/>local HTML review}:::hitl
         A3(<b>3_glue_verifier</b><br/><i>run in dev + validate output</i>):::agent
         A4(<b>4_tf_coder</b><br/><i>scripts to Snowflake + Glue TF</i>):::agent
         A5(<b>5_secops_reviewer</b><br/><i>artifacts to approve or reject</i>):::secure
@@ -66,7 +67,8 @@ graph TD
         A7(<b>7_deploy_trigger</b><br/><i>PR to Harness CICD to SQA</i>):::agent
 
         A1 -->|python_handoff.md| A2
-        A2 -->|cleaned_handoff.md| A3
+        A2 -->|proposed rules HTML| HITL_CLEAN
+        HITL_CLEAN -->|cleaning_review.json<br/>then cleaned_handoff.md| A3
         A3 -->|status: succeeded| A4
         A3 -.->|status: failed<br/>max 5 attempts| A1
         A3 -->|glue_verifier_handoff.md<br/>+ data_profile.md| A4
@@ -181,14 +183,27 @@ node index.js --from 5
 
 The orchestrator validates that every required prior handoff exists on disk before it resumes; if a handoff is missing it fails loudly rather than silently continuing with incomplete context. Because the mailbox is durable, resuming is deterministic — you continue with exactly the artifacts the earlier run produced.
 
-### Decision 4 — Human-in-the-Loop at exactly two gates
+### Decision 4 — Human-in-the-Loop at three mandatory gates
 
-Full autonomy is a liability at the two moments where a mistake is expensive and irreversible. The orchestrator uses Node's `readline` to hard-pause and wait for a human:
+Full autonomy is a liability at the moments where a mistake is expensive and irreversible. The pipeline hard-pauses for a human at three gates:
 
-- **After Planning** — approve the formal spec before any code is generated. (Cheap to fix a misunderstanding here; very expensive to fix it after deploy.)
-- **After Security Review** — if the SecOps reviewer returns `status: rejected`, the pipeline stops and requires a human to fix the issue and explicitly continue.
+1. **After Planning** — approve the formal spec before any code is generated. (Cheap to fix a misunderstanding here; very expensive to fix it after deploy.) *Rendered as a `readline` prompt.*
+2. **Before Data Cleaning executes** — the developer reviews the proposed cleaning rules and triages them item-by-item; the cleaning step only runs *after* this confirmation. Rendered through the "UI-as-a-file" bridge described in Decision 5.
+3. **After Security Review** — if the SecOps reviewer returns `status: rejected`, the pipeline stops and requires a human to fix the issue and explicitly continue. *Rendered as a `readline` prompt.*
 
 Everything else runs unattended. The design goal is **maximum autonomy with minimum blast radius**, not autonomy for its own sake.
+
+### Decision 5 — Dynamic UI Generation for Complex Reviews ("UI-as-a-file")
+
+**Problem:** data-cleaning review is the one gate where a plain-text CLI falls apart. Reviewing a set of proposed cleaning rules and their per-column diffs in raw `stdout` is unreadable, and I was constrained to a terminal environment with no native IDE extension to render a rich diff.
+
+**Solution:** rather than fight the terminal, the pipeline **generates its own review surface**. At the data-cleaning stage it dynamically writes a **zero-dependency, localized HTML page** enumerating the proposed cleaning rules/steps. The developer does **granular, per-item triage — Approve / Skip / Feedback** — and the page serializes those decisions into a **state-injected JSON** file.
+
+That JSON is written straight back into `.agent_state/`, so human intent re-enters the pipeline through the exact same file-mailbox the agents already use — **feeding structured human feedback into the deterministic DAG without breaking the orchestration flow.** The next stage (code generation) consumes it like any other handoff.
+
+Why it matters: this is a pragmatic *"UI-as-a-file"* bridge. It gives a human a real interface for a genuinely complex review, yet the boundary crossing back into automation is still a plain, inspectable file — determinism and observability are preserved end-to-end. It's a small example of building the missing tool when the environment doesn't give you one.
+
+> This is **HITL gate 2** from Decision 4 — a mandatory stop. The data-cleaning step never executes until the developer confirms this report. The HTML page is *how* that review is rendered; the state-injected JSON is *how* the confirmation re-enters the deterministic DAG.
 
 ---
 
