@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Source material (internal drafts — not for the public repo)
+*.docx
+.prd/
+
+# Runtime agent state (illustrative artifacts live in mock_data/ instead)
+.agent_state/
+.tmp/
+
+# Node (in case the real orchestrator is ever added)
+node_modules/
+npm-debug.log*
+.env
+.env.*
+
+# Editor / OS noise
+*.swp
+*~
+.idea/
+.vscode/
